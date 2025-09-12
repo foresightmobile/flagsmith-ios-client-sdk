@@ -71,6 +71,8 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     override init() {
         super.init()
         let configuration = URLSessionConfiguration.default
+        // Set initial cache configuration - this will be updated when cache settings change
+        configuration.urlCache = URLCache.shared
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: OperationQueue.main)
     }
 
@@ -91,7 +93,7 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         }
     }
 
-    func urlSession(_: URLSession, dataTask _: URLSessionDataTask, willCacheResponse proposedResponse: CachedURLResponse,
+    func urlSession(_: URLSession, dataTask: URLSessionDataTask, willCacheResponse proposedResponse: CachedURLResponse,
                     completionHandler: @Sendable @escaping (CachedURLResponse?) -> Void)
     {
         serialAccessQueue.sync {
@@ -139,14 +141,51 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             return
         }
 
-        // set the cache policy based on Flagsmith settings
-        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        session.configuration.urlCache = Flagsmith.shared.cacheConfig.cache
-        if Flagsmith.shared.cacheConfig.useCache {
-            request.cachePolicy = .useProtocolCachePolicy
-            if Flagsmith.shared.cacheConfig.skipAPI {
-                request.cachePolicy = .returnCacheDataElseLoad
+        let cacheConfig = Flagsmith.shared.cacheConfig
+        
+        // Check if we have a cached response before making the request
+        var shouldUseCachedResponse = false
+        if let cachedResponse = cacheConfig.cache.cachedResponse(for: request) {
+            // Check if the cached response is still valid based on our TTL
+            if let httpResponse = cachedResponse.response as? HTTPURLResponse,
+               let dateString = httpResponse.allHeaderFields["Date"] as? String {
+                
+                // Parse the Date header using robust date parsing
+                if let responseDate = parseDateHeader(dateString) {
+                    let cacheAge = Date().timeIntervalSince(responseDate)
+                    
+                    if cacheAge < cacheConfig.cacheTTL {
+                        shouldUseCachedResponse = true
+                    } else {
+                        // Remove expired cache entry when skipAPI is true
+                        if cacheConfig.skipAPI {
+                            cacheConfig.cache.removeCachedResponse(for: request)
+                        }
+                    }
+                }
             }
+        }
+
+        // Set cache policy based on Flagsmith settings and manual validation
+        if cacheConfig.useCache {
+            if cacheConfig.skipAPI {
+                if shouldUseCachedResponse {
+                    request.cachePolicy = .returnCacheDataDontLoad
+                } else {
+                    request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+                }
+            } else {
+                request.cachePolicy = .useProtocolCachePolicy
+            }
+        } else {
+            request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        }
+        
+        // Update session cache (note: this creates a new session each time, which is needed for cache changes)
+        if session.configuration.urlCache !== cacheConfig.cache {
+            let configuration = URLSessionConfiguration.default
+            configuration.urlCache = cacheConfig.cache
+            session = URLSession(configuration: configuration, delegate: self, delegateQueue: OperationQueue.main)
         }
 
         // we must use the delegate form here, not the completion handler, to be able to modify the cache
@@ -203,5 +242,40 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             print("Last Updated At from header: \(lastUpdatedAt)")
             self.lastUpdatedAt = Double(lastUpdatedAt)
         }
+    }
+    
+    /// Parse HTTP Date header with fallback formats
+    private func parseDateHeader(_ dateString: String) -> Date? {
+        let formatters = [
+            // RFC 1123 (preferred HTTP date format)
+            { () -> DateFormatter in
+                let formatter = DateFormatter()
+                formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                return formatter
+            }(),
+            // RFC 850 (obsolete format)
+            { () -> DateFormatter in
+                let formatter = DateFormatter()
+                formatter.dateFormat = "EEEE, dd-MMM-yy HH:mm:ss zzz"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                return formatter
+            }(),
+            // ANSI C asctime() format
+            { () -> DateFormatter in
+                let formatter = DateFormatter()
+                formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                return formatter
+            }()
+        ]
+        
+        for formatter in formatters {
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+        }
+        
+        return nil
     }
 }
