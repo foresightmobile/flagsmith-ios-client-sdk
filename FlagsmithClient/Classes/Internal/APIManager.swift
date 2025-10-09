@@ -13,7 +13,7 @@ import Foundation
 /// Handles interaction with a **Flagsmith** api.
 final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private var _session: URLSession!
-    private var session: URLSession {
+    internal var session: URLSession {
         get {
             propertiesSerialAccessQueue.sync { _session }
         }
@@ -70,10 +70,61 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
 
     override init() {
         super.init()
-        let configuration = URLSessionConfiguration.default
-        // Set initial cache configuration - this will be updated when cache settings change
-        configuration.urlCache = URLCache.shared
+        let configuration = createURLSessionConfiguration()
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: OperationQueue.main)
+    }
+    
+    /// Creates a URLSessionConfiguration with current network and cache settings
+    private func createURLSessionConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        
+        // Apply network configuration - use default values during initialization
+        configuration.timeoutIntervalForRequest = 60.0
+        configuration.timeoutIntervalForResource = 604800.0
+        configuration.waitsForConnectivity = true
+        configuration.allowsCellularAccess = true
+        configuration.httpMaximumConnectionsPerHost = 6
+        configuration.httpAdditionalHeaders = [:]
+        configuration.httpShouldUsePipelining = true
+        configuration.httpShouldSetCookies = true
+        
+        // Apply cache configuration
+        configuration.urlCache = URLCache.shared
+        
+        return configuration
+    }
+    
+    /// Creates a URLSessionConfiguration with specific network and cache settings
+    private func createURLSessionConfiguration(networkConfig: NetworkConfig, cacheConfig: CacheConfig) -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        
+        // Apply network configuration
+        configuration.timeoutIntervalForRequest = networkConfig.requestTimeout
+        configuration.timeoutIntervalForResource = networkConfig.resourceTimeout
+        configuration.waitsForConnectivity = networkConfig.waitsForConnectivity
+        configuration.allowsCellularAccess = networkConfig.allowsCellularAccess
+        configuration.httpMaximumConnectionsPerHost = networkConfig.httpMaximumConnectionsPerHost
+        configuration.httpAdditionalHeaders = networkConfig.httpAdditionalHeaders
+        configuration.httpShouldUsePipelining = networkConfig.httpShouldUsePipelining
+        configuration.httpShouldSetCookies = networkConfig.httpShouldSetCookies
+        
+        // Apply cache configuration
+        configuration.urlCache = cacheConfig.cache
+        
+        return configuration
+    }
+    
+    /// Helper function to compare HTTP headers dictionaries
+    private func areHeadersEqual(_ headers1: [AnyHashable: Any]?, _ headers2: [AnyHashable: Any]?) -> Bool {
+        guard let h1 = headers1, let h2 = headers2 else {
+            return headers1 == nil && headers2 == nil
+        }
+        
+        // Convert to [String: String] for comparison
+        let dict1 = h1.compactMapValues { $0 as? String }
+        let dict2 = h2.compactMapValues { $0 as? String }
+        
+        return dict1 == dict2
     }
 
     func urlSession(_: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
@@ -153,12 +204,13 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
 
         // we must use the delegate form here, not the completion handler, to be able to modify the cache
         serialAccessQueue.sync {
-            // Update session cache configuration if it has changed (must be done inside the serial queue)
-            if session.configuration.urlCache !== Flagsmith.shared.cacheConfig.cache {
-                let configuration = URLSessionConfiguration.default
-                configuration.urlCache = Flagsmith.shared.cacheConfig.cache
-                session = URLSession(configuration: configuration, delegate: self, delegateQueue: OperationQueue.main)
-            }
+            // Always recreate session with current network and cache configuration
+            // This ensures that any changes to network config are applied immediately
+            let networkConfig = Flagsmith.shared.networkConfig
+            let cacheConfig = Flagsmith.shared.cacheConfig
+            
+            let newConfig = createURLSessionConfiguration(networkConfig: networkConfig, cacheConfig: cacheConfig)
+            session = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
 
             let task = session.dataTask(with: request)
             tasksToCompletionHandlers[task.taskIdentifier] = completion

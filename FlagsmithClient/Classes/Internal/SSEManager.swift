@@ -15,7 +15,7 @@ import Foundation
 /// and handles reconnection logic with a backoff strategy.
 final class SSEManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private var _session: URLSession!
-    private var session: URLSession {
+    internal var session: URLSession {
         get {
             propertiesSerialAccessQueue.sync { _session }
         }
@@ -75,8 +75,55 @@ final class SSEManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
 
     override init() {
         super.init()
-        let configuration = URLSessionConfiguration.default
+        let configuration = createURLSessionConfiguration()
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: OperationQueue.main)
+    }
+    
+    /// Creates a URLSessionConfiguration with current network settings
+    private func createURLSessionConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        
+        // Apply network configuration - use default values during initialization
+        configuration.timeoutIntervalForRequest = 60.0
+        configuration.timeoutIntervalForResource = 604800.0
+        configuration.waitsForConnectivity = true
+        configuration.allowsCellularAccess = true
+        configuration.httpMaximumConnectionsPerHost = 6
+        configuration.httpAdditionalHeaders = [:]
+        configuration.httpShouldUsePipelining = true
+        configuration.httpShouldSetCookies = true
+        
+        return configuration
+    }
+    
+    /// Creates a URLSessionConfiguration with specific network settings
+    private func createURLSessionConfiguration(networkConfig: NetworkConfig) -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        
+        // Apply network configuration
+        configuration.timeoutIntervalForRequest = networkConfig.requestTimeout
+        configuration.timeoutIntervalForResource = networkConfig.resourceTimeout
+        configuration.waitsForConnectivity = networkConfig.waitsForConnectivity
+        configuration.allowsCellularAccess = networkConfig.allowsCellularAccess
+        configuration.httpMaximumConnectionsPerHost = networkConfig.httpMaximumConnectionsPerHost
+        configuration.httpAdditionalHeaders = networkConfig.httpAdditionalHeaders
+        configuration.httpShouldUsePipelining = networkConfig.httpShouldUsePipelining
+        configuration.httpShouldSetCookies = networkConfig.httpShouldSetCookies
+        
+        return configuration
+    }
+    
+    /// Helper function to compare HTTP headers dictionaries
+    private func areHeadersEqual(_ headers1: [AnyHashable: Any]?, _ headers2: [AnyHashable: Any]?) -> Bool {
+        guard let h1 = headers1, let h2 = headers2 else {
+            return headers1 == nil && headers2 == nil
+        }
+        
+        // Convert to [String: String] for comparison
+        let dict1 = h1.compactMapValues { $0 as? String }
+        let dict2 = h2.compactMapValues { $0 as? String }
+        
+        return dict1 == dict2
     }
 
     // Helper function to process SSE data
@@ -157,6 +204,11 @@ final class SSEManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         request.setValue("text/event-stream, application/json; charset=utf-8", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        // Always recreate session with current network configuration
+        // This ensures that any changes to network config are applied immediately
+        let newConfig = createURLSessionConfiguration(networkConfig: Flagsmith.shared.networkConfig)
+        session = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
 
         completionHandler = completion
         dataTask = session.dataTask(with: request)
