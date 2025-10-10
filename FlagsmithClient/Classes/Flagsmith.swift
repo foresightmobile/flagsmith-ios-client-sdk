@@ -426,25 +426,4 @@ public final class CacheConfig {
 public final class NetworkConfig {
     /// The timeout interval for URL requests, in seconds. Default is 60.0 seconds.
     public var requestTimeout: TimeInterval = 60.0
-    
-    /// The timeout interval for the entire resource request, in seconds. Default is 7 days (604800 seconds).
-    public var resourceTimeout: TimeInterval = 604800.0
-    
-    /// A Boolean value that determines whether the session should wait for connectivity to become available. Default is true.
-    public var waitsForConnectivity: Bool = true
-    
-    /// A Boolean value that determines whether the session should use cellular access. Default is true.
-    public var allowsCellularAccess: Bool = true
-    
-    /// The maximum number of simultaneous connections to make to a given host. Default is 6.
-    public var httpMaximumConnectionsPerHost: Int = 6
-    
-    /// Additional HTTP headers to be sent with requests. Default is empty.
-    public var httpAdditionalHeaders: [String: String] = [:]
-    
-    /// A Boolean value that determines whether the session should use HTTP pipelining. Default is true.
-    public var httpShouldUsePipelining: Bool = true
-    
-    /// A Boolean value that determines whether the session should automatically set the "Accept-Encoding" header. Default is true.
-    public var httpShouldSetCookies: Bool = true
 }

@@ -102,29 +102,10 @@ final class SSEManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         
         // Apply network configuration
         configuration.timeoutIntervalForRequest = networkConfig.requestTimeout
-        configuration.timeoutIntervalForResource = networkConfig.resourceTimeout
-        configuration.waitsForConnectivity = networkConfig.waitsForConnectivity
-        configuration.allowsCellularAccess = networkConfig.allowsCellularAccess
-        configuration.httpMaximumConnectionsPerHost = networkConfig.httpMaximumConnectionsPerHost
-        configuration.httpAdditionalHeaders = networkConfig.httpAdditionalHeaders
-        configuration.httpShouldUsePipelining = networkConfig.httpShouldUsePipelining
-        configuration.httpShouldSetCookies = networkConfig.httpShouldSetCookies
         
         return configuration
     }
     
-    /// Helper function to compare HTTP headers dictionaries
-    private func areHeadersEqual(_ headers1: [AnyHashable: Any]?, _ headers2: [AnyHashable: Any]?) -> Bool {
-        guard let h1 = headers1, let h2 = headers2 else {
-            return headers1 == nil && headers2 == nil
-        }
-        
-        // Convert to [String: String] for comparison
-        let dict1 = h1.compactMapValues { $0 as? String }
-        let dict2 = h2.compactMapValues { $0 as? String }
-        
-        return dict1 == dict2
-    }
 
     // Helper function to process SSE data
     internal func processSSEData(_ data: String) {
@@ -208,10 +189,13 @@ final class SSEManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         // Always recreate session with current network configuration
         // This ensures that any changes to network config are applied immediately
         let newConfig = createURLSessionConfiguration(networkConfig: Flagsmith.shared.networkConfig)
-        session = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
+        let newSession = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
+        
+        // Update session using the property setter to ensure thread-safe access
+        self.session = newSession
 
         completionHandler = completion
-        dataTask = session.dataTask(with: request)
+        dataTask = newSession.dataTask(with: request)
         dataTask?.resume()
     }
 

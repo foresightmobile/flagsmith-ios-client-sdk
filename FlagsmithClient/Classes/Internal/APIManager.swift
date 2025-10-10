@@ -100,13 +100,6 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         
         // Apply network configuration
         configuration.timeoutIntervalForRequest = networkConfig.requestTimeout
-        configuration.timeoutIntervalForResource = networkConfig.resourceTimeout
-        configuration.waitsForConnectivity = networkConfig.waitsForConnectivity
-        configuration.allowsCellularAccess = networkConfig.allowsCellularAccess
-        configuration.httpMaximumConnectionsPerHost = networkConfig.httpMaximumConnectionsPerHost
-        configuration.httpAdditionalHeaders = networkConfig.httpAdditionalHeaders
-        configuration.httpShouldUsePipelining = networkConfig.httpShouldUsePipelining
-        configuration.httpShouldSetCookies = networkConfig.httpShouldSetCookies
         
         // Apply cache configuration
         configuration.urlCache = cacheConfig.cache
@@ -114,18 +107,6 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         return configuration
     }
     
-    /// Helper function to compare HTTP headers dictionaries
-    private func areHeadersEqual(_ headers1: [AnyHashable: Any]?, _ headers2: [AnyHashable: Any]?) -> Bool {
-        guard let h1 = headers1, let h2 = headers2 else {
-            return headers1 == nil && headers2 == nil
-        }
-        
-        // Convert to [String: String] for comparison
-        let dict1 = h1.compactMapValues { $0 as? String }
-        let dict2 = h2.compactMapValues { $0 as? String }
-        
-        return dict1 == dict2
-    }
 
     func urlSession(_: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         serialAccessQueue.sync {
@@ -210,9 +191,12 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             let cacheConfig = Flagsmith.shared.cacheConfig
             
             let newConfig = createURLSessionConfiguration(networkConfig: networkConfig, cacheConfig: cacheConfig)
-            session = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
+            let newSession = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
+            
+            // Update session using the property setter to ensure thread-safe access
+            self.session = newSession
 
-            let task = session.dataTask(with: request)
+            let task = newSession.dataTask(with: request)
             tasksToCompletionHandlers[task.taskIdentifier] = completion
             task.resume()
         }
