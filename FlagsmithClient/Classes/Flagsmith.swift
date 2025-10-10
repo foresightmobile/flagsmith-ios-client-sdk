@@ -111,6 +111,19 @@ public final class Flagsmith: @unchecked Sendable {
         }
     }
 
+    /// Configuration class for network settings
+    private var _networkConfig: NetworkConfig = .init()
+    public var networkConfig: NetworkConfig {
+        get {
+            apiManager.propertiesSerialAccessQueue.sync { _networkConfig }
+        }
+        set {
+            apiManager.propertiesSerialAccessQueue.sync {
+                _networkConfig = newValue
+            }
+        }
+    }
+
     private init() {
         apiManager = APIManager()
         sseManager = SSEManager()
@@ -407,4 +420,10 @@ public final class CacheConfig {
 
     /// Skip API if there is a cache available
     public var skipAPI: Bool = false
+}
+
+/// Configuration class for network settings
+public final class NetworkConfig {
+    /// The timeout interval for URL requests, in seconds. Default is 60.0 seconds.
+    public var requestTimeout: TimeInterval = 60.0
 }
