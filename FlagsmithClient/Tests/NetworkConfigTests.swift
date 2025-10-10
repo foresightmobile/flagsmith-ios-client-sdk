@@ -1,4 +1,3 @@
-
 @testable import FlagsmithClient
 import XCTest
 
@@ -42,10 +41,10 @@ final class NetworkConfigTests: FlagsmithClientTestCase {
         let initialTimeout = flagsmith.networkConfig.requestTimeout
         
         // Test concurrent access to network config
-        for i in 0..<10 {
+        for idx in 0..<10 {
             DispatchQueue.global().async {
                 // Test that we can safely set values concurrently
-                flagsmith.networkConfig.requestTimeout = Double(i)
+                flagsmith.networkConfig.requestTimeout = Double(idx)
                 expectation.fulfill()
             }
         }
@@ -77,11 +76,11 @@ final class NetworkConfigTests: FlagsmithClientTestCase {
         XCTAssertEqual(networkConfig.requestTimeout, 3600.0)
     }
     
-    func testNetworkConfigEquality() {
+    func testNetworkConfigRequestTimeoutComparison() {
         let config1 = NetworkConfig()
         let config2 = NetworkConfig()
         
-        // Identical configs should be equal
+        // Identical configs should have equal requestTimeout
         XCTAssertEqual(config1.requestTimeout, config2.requestTimeout)
         
         // Modify one config

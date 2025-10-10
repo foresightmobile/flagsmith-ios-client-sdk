@@ -191,8 +191,10 @@ final class SSEManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         let newConfig = createURLSessionConfiguration(networkConfig: Flagsmith.shared.networkConfig)
         let newSession = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
         
-        // Update session using the property setter to ensure thread-safe access
+        // Invalidate previous session before swapping to avoid resource buildup
+        let oldSession = self.session
         self.session = newSession
+        oldSession.invalidateAndCancel()
 
         completionHandler = completion
         dataTask = newSession.dataTask(with: request)
@@ -201,6 +203,7 @@ final class SSEManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
 
     func stop() {
         dataTask?.cancel()
+        dataTask = nil
         completionHandler = nil
     }
 }

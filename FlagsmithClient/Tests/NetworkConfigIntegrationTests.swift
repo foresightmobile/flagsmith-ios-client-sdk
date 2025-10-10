@@ -1,4 +1,3 @@
-
 @testable import FlagsmithClient
 import XCTest
 
@@ -10,22 +9,8 @@ final class NetworkConfigIntegrationTests: FlagsmithClientTestCase {
         // Set custom network configuration
         flagsmith.networkConfig.requestTimeout = 1.0
         
-        // Verify the configuration is set correctly
-        XCTAssertEqual(flagsmith.networkConfig.requestTimeout, 1.0)
-    }
-    
-    func testURLSessionConfigurationCreation() {
-        let flagsmith = Flagsmith.shared
-        
-        // Set custom network configuration
-        flagsmith.networkConfig.requestTimeout = 1.0
-        
-        // Create a URLSessionConfiguration directly
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = flagsmith.networkConfig.requestTimeout
-        
         // Verify the configuration is applied correctly
-        XCTAssertEqual(config.timeoutIntervalForRequest, 1.0, "Request timeout should be applied")
+        XCTAssertEqual(flagsmith.networkConfig.requestTimeout, 1.0, "Request timeout should be applied")
     }
     
     func testAPIManagerUsesNetworkConfig() {
@@ -42,7 +27,7 @@ final class NetworkConfigIntegrationTests: FlagsmithClientTestCase {
         
         // Trigger a request to apply the network configuration
         let expectation = XCTestExpectation(description: "Request to apply config")
-        apiManager.request(.getFlags) { result in
+        apiManager.request(.getFlags) { _ in
             // Check the session configuration inside the completion handler
             let sessionConfig = apiManager.session.configuration
             XCTAssertEqual(sessionConfig.timeoutIntervalForRequest, 1.0, "Request timeout should be applied")
@@ -65,7 +50,7 @@ final class NetworkConfigIntegrationTests: FlagsmithClientTestCase {
         
         // Trigger the start method to apply the network configuration
         // The start method calls the completion handler immediately, so we don't need to wait
-        sseManager.start { result in
+        sseManager.start { _ in
             // This will be called immediately when start() is called
         }
         
@@ -86,7 +71,7 @@ final class NetworkConfigIntegrationTests: FlagsmithClientTestCase {
         flagsmith.networkConfig.requestTimeout = 60.0
         
         let initialExpectation = XCTestExpectation(description: "Initial request")
-        apiManager.request(.getFlags) { result in
+        apiManager.request(.getFlags) { _ in
             initialExpectation.fulfill()
         }
         wait(for: [initialExpectation], timeout: 1.0)
@@ -100,7 +85,7 @@ final class NetworkConfigIntegrationTests: FlagsmithClientTestCase {
         
         // Trigger a request to apply the new configuration
         let expectation = XCTestExpectation(description: "Request completion")
-        apiManager.request(.getFlags) { result in
+        apiManager.request(.getFlags) { _ in
             expectation.fulfill()
         }
         
@@ -111,14 +96,25 @@ final class NetworkConfigIntegrationTests: FlagsmithClientTestCase {
         XCTAssertEqual(newSessionConfig.timeoutIntervalForRequest, 30.0, "New timeout should be applied")
     }
     
+    func testURLSessionConfigurationCreation() {
+        let flagsmith = Flagsmith.shared
+        flagsmith.networkConfig.requestTimeout = 1.0
+        
+        // Create a new APIManager to test the configuration
+        let apiManager = APIManager()
+        
+        // Verify the configuration is applied correctly
+        let config = apiManager.session.configuration
+        XCTAssertEqual(config.timeoutIntervalForRequest, 1.0, "Request timeout should be applied")
+    }
     
     func testNetworkConfigPerformance() {
         let flagsmith = Flagsmith.shared
         
         // Measure time to create and configure multiple network configs
         measure {
-            for i in 0..<100 {
-                flagsmith.networkConfig.requestTimeout = Double(i)
+            for iteration in 0..<100 {
+                flagsmith.networkConfig.requestTimeout = Double(iteration)
             }
         }
     }

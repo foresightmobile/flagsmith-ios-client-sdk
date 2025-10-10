@@ -193,8 +193,10 @@ final class APIManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             let newConfig = createURLSessionConfiguration(networkConfig: networkConfig, cacheConfig: cacheConfig)
             let newSession = URLSession(configuration: newConfig, delegate: self, delegateQueue: OperationQueue.main)
             
-            // Update session using the property setter to ensure thread-safe access
+            // Invalidate previous session before swapping to avoid resource buildup
+            let oldSession = self.session
             self.session = newSession
+            oldSession.invalidateAndCancel()
 
             let task = newSession.dataTask(with: request)
             tasksToCompletionHandlers[task.taskIdentifier] = completion
