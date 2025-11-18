@@ -17,6 +17,25 @@ typealias CompletionHandler<T> = @Sendable (Result<T, any Error>) -> Void
 public final class Flagsmith: @unchecked Sendable {
     /// Shared singleton client object
     public static let shared: Flagsmith = .init()
+    
+    /// SDK version constant - managed by release-please
+    // x-release-please-start-version
+    private static let sdkVersionConstant = "3.8.4"
+    // // x-release-please-end
+
+    /// User-Agent header value for HTTP requests
+    /// Format: flagsmith-swift-ios-sdk/<version>
+    /// Version is managed by release-please automation
+    public static var userAgent: String {
+        let version = getSDKVersion()
+        return "flagsmith-swift-ios-sdk/\(version)"
+    }
+
+    /// Get the SDK version
+    /// Returns the version constant managed by release-please
+    private static func getSDKVersion() -> String {
+        return sdkVersionConstant
+    }
     private let apiManager: APIManager
     private let sseManager: SSEManager
     private let analytics: FlagsmithAnalytics
